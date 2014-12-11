@@ -1,0 +1,96 @@
+#!/bin/bash
+
+
+exname="$(basename $0)"
+
+##
+help="Applies CHANGE aufs directory layer to BASE"
+
+
+usage="$exname BASE CHANGE"
+
+
+if [ -z "$1" ]; then 
+   echo "Error: Missing BASE argument." >&2
+   echo "$usage"
+   exit 1
+fi
+
+if ! [ -d "$1" ]; then
+    echo "Error: BASE '$1' is not a directory." >&2
+    echo "$usage"
+    exit 1
+fi
+
+base=$1
+shift
+if [ -z "$1" ]; then 
+   echo "Error: Missing CHANGE argument." >&2
+   echo "$usage"
+   exit 1
+fi
+
+if ! [ -d "$1" ]; then
+    echo "Error: BASE '$1' is not a directory." >&2
+    echo "$usage"
+    exit 1
+fi
+change=$1
+shift
+
+if [ "$1" ]; then
+     echo "Error: too much arguments." >&2
+     echo "$usage"
+     exit 1
+fi
+
+
+shopt -s dotglob
+
+opaque-apply() {
+    local base change
+    base=$1
+    change=$2
+    for df in $base/*; do
+       src=${df/#$base/$change}
+       if ! [ -e "$src" ]; then
+           rm -rf "$df"
+       fi
+       if [ -d "$src" ]; then
+           opaque-apply "$df" "$src"
+       fi  
+    done
+}
+
+
+apply-change() {
+    local base change
+    base=$1
+    change=$2
+    for i in $change/*; do
+        bn=$(basename "$i")
+        dest=${i/#$change/$base}
+        if [[ "$bn" == ".wh."* ]]; then
+            lp=${bn/#.wh./}
+            if [[ "$lp" == ".wh..opq" ]]; then
+                opaque-apply "$base" "$change"
+                continue
+            fi
+            
+            rm -rf "$base/$lp"
+            continue                
+        fi
+        if [ -d "$i" ]; then
+            if ! [ -d "$dest" ]; then
+                cp -a "$i" "$dest"
+            else
+                apply-change "$dest" "$i"
+            fi
+        elif [ -f "$i" ] ; then
+               cp "$i" "$dest"
+        fi
+    
+    done
+} 
+
+apply-change $base $change
